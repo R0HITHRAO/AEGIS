@@ -64,10 +64,16 @@ function Logo() {
   return <div className="brand"><Shield size={22} strokeWidth={2.5} /><span>AEGIS</span><i>01</i></div>
 }
 
+function sceneAmount(progress, start, end) {
+  const fade = 0.06
+  return Math.max(0, Math.min(1, (progress - (start - fade)) / fade, ((end + fade) - progress) / fade, (progress - start) / (end - start)))
+}
+
 function NeuralArtifact({ progress }) {
   const group = useRef()
   const brain = useRef()
   const nodes = useRef()
+  const amount = sceneAmount(progress, 0, 0.2)
   const points = useMemo(() => {
     const values = []
     for (let i = 0; i < 900; i += 1) {
@@ -85,9 +91,11 @@ function NeuralArtifact({ progress }) {
   useFrame((_, delta) => {
     if (!group.current) return
     group.current.rotation.y += delta * 0.08
-    group.current.rotation.x = progress < 0.3 ? progress * 0.3 : (progress - 0.5) * 0.15
-    if (brain.current) brain.current.scale.setScalar(1 + progress * 0.18)
-    if (nodes.current) nodes.current.material.opacity = 0.2 + Math.min(progress * 1.7, 0.8)
+    group.current.rotation.x = progress * 0.3
+    group.current.scale.setScalar(0.7 + amount * 0.35)
+    group.current.position.x = (progress - 0.1) * 1.8
+    if (brain.current) brain.current.material.opacity = 0.2 + amount * 0.65
+    if (nodes.current) nodes.current.material.opacity = amount * 0.8
   })
   const geometry = useMemo(() => {
     const buffer = new THREE.BufferGeometry()
@@ -103,23 +111,36 @@ function NeuralArtifact({ progress }) {
 
 function EngineNetwork({ progress }) {
   const group = useRef()
+  const amount = sceneAmount(progress, 0.2, 0.4)
   useFrame((_, delta) => { if (group.current) group.current.rotation.y += delta * 0.12 })
   const lines = useMemo(() => Array.from({ length: 20 }, (_, i) => {
     const a = new THREE.Vector3(Math.sin(i) * 1.4, Math.cos(i * 1.7) * 1.4, Math.sin(i * 2) * 1.1)
     const b = new THREE.Vector3(Math.sin(i + 1.2) * 1.4, Math.cos(i * 1.7 + 1) * 1.4, Math.sin(i * 2 + 1) * 1.1)
     return [a, b]
   }), [])
-  return <group ref={group}>{lines.map(([a, b], index) => <group key={index}><line><bufferGeometry><bufferAttribute attach="attributes-position" count={2} array={new Float32Array([...a.toArray(), ...b.toArray()])} itemSize={3} /></bufferGeometry><lineBasicMaterial color={index / 20 < progress ? '#00ffd1' : '#263b3c'} transparent opacity={0.8} /></line><mesh position={a}><sphereGeometry args={[0.07, 8, 8]} /><meshBasicMaterial color={index / 20 < progress ? '#00ffd1' : '#30494a'} /></mesh></group>)}</group>
+  useFrame(() => { if (group.current) { group.current.scale.setScalar(0.6 + amount * 0.45); group.current.position.x = (progress - 0.3) * 1.8 } })
+  return <group ref={group}>{lines.map(([a, b], index) => <group key={index}><line><bufferGeometry><bufferAttribute attach="attributes-position" count={2} array={new Float32Array([...a.toArray(), ...b.toArray()])} itemSize={3} /></bufferGeometry><lineBasicMaterial color={index / 20 < amount ? '#00ffd1' : '#263b3c'} transparent opacity={amount * 0.85} /></line><mesh position={a}><sphereGeometry args={[0.07, 8, 8]} /><meshBasicMaterial color={index / 20 < amount ? '#00ffd1' : '#30494a'} transparent opacity={amount} /></mesh></group>)}</group>
 }
 
 function GlobeArtifact({ progress }) {
   const group = useRef()
+  const amount = sceneAmount(progress, 0.62, 0.82)
   useFrame((_, delta) => { if (group.current) group.current.rotation.y += delta * 0.1 })
-  return <group ref={group}><mesh><sphereGeometry args={[1.8, 32, 32]} /><meshBasicMaterial color="#073b3c" wireframe transparent opacity={0.55} /></mesh>{Array.from({ length: 16 }, (_, i) => <mesh key={i} position={[Math.sin(i) * 1.7, Math.cos(i * 1.3) * 1.3, Math.sin(i * 2.1) * 1.4]}><sphereGeometry args={[0.045 + progress * 0.03, 8, 8]} /><meshBasicMaterial color={i % 3 === 0 ? '#ffd44d' : '#00ffd1'} /></mesh>)}</group>
+  useFrame(() => { if (group.current) { group.current.scale.setScalar(0.7 + amount * 0.35); group.current.position.x = (progress - 0.72) * 1.8 } })
+  return <group ref={group}><mesh><sphereGeometry args={[1.8, 32, 32]} /><meshBasicMaterial color="#073b3c" wireframe transparent opacity={amount * 0.55} /></mesh>{Array.from({ length: 16 }, (_, i) => <mesh key={i} position={[Math.sin(i) * 1.7, Math.cos(i * 1.3) * 1.3, Math.sin(i * 2.1) * 1.4]}><sphereGeometry args={[0.045 + amount * 0.03, 8, 8]} /><meshBasicMaterial color={i % 3 === 0 ? '#ffd44d' : '#00ffd1'} transparent opacity={amount} /></mesh>)}</group>
+}
+
+function ParticleCta({ progress }) {
+  const group = useRef()
+  const amount = sceneAmount(progress, 0.82, 1)
+  const particles = useMemo(() => Array.from({ length: 280 }, (_, i) => new THREE.Vector3(Math.sin(i * 2.1) * (0.3 + (i % 7) * 0.14), Math.cos(i * 1.7) * (0.3 + (i % 5) * 0.16), Math.sin(i * 0.8) * (0.3 + (i % 9) * 0.1))), [])
+  const geometry = useMemo(() => { const buffer = new THREE.BufferGeometry(); buffer.setFromPoints(particles); return buffer }, [particles])
+  useFrame((_, delta) => { if (group.current) { group.current.rotation.y += delta * 0.2; group.current.scale.setScalar(0.5 + amount * 1.1); group.current.position.x = (progress - 0.9) * 1.8 } })
+  return <group ref={group}><points geometry={geometry}><pointsMaterial color="#ffd44d" size={0.035} transparent opacity={amount * 0.9} blending={THREE.AdditiveBlending} /></points></group>
 }
 
 function ScrollCanvas({ progress }) {
-  return <div className="webgl-stage"><Canvas camera={{ position: [0, 0, 7], fov: 42 }} dpr={[1, 1.5]}><ambientLight intensity={0.2} /><pointLight position={[3, 2, 4]} color="#00ffd1" intensity={8} /><NeuralArtifact progress={progress} /><EngineNetwork progress={progress} /><GlobeArtifact progress={progress} /></Canvas></div>
+  return <div className="webgl-stage"><Canvas camera={{ position: [0, 0, 7], fov: 42 }} dpr={[1, 1.5]}><ambientLight intensity={0.2} /><pointLight position={[3, 2, 4]} color="#00ffd1" intensity={8} /><NeuralArtifact progress={progress} /><EngineNetwork progress={progress} /><GlobeArtifact progress={progress} /><ParticleCta progress={progress} /></Canvas></div>
 }
 
 function Landing() {
