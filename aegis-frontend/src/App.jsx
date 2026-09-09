@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Component, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import gsap from 'gsap'
@@ -28,6 +28,21 @@ import {
   Zap,
 } from 'lucide-react'
 import './App.css'
+
+class AppErrorBoundary extends Component {
+  state = { hasError: false }
+
+  static getDerivedStateFromError() {
+    return { hasError: true }
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return <main className="error-screen"><Shield size={34} /><h1>AEGIS needs a restart.</h1><p>The interface hit an unexpected error. Reload to restore the command center.</p><button className="button button-primary" onClick={() => window.location.reload()}>Reload AEGIS <ArrowRight size={16} /></button></main>
+    }
+    return this.props.children
+  }
+}
 
 const modules = [
   { icon: Headphones, name: 'Echo Guard', label: 'Voice clone detection', color: 'cyan', detail: 'Spectral biomarker analysis for live calls.' },
@@ -139,24 +154,34 @@ function ParticleCta({ progress }) {
   return <group ref={group}><points geometry={geometry}><pointsMaterial color="#ffd44d" size={0.035} transparent opacity={amount * 0.9} blending={THREE.AdditiveBlending} /></points></group>
 }
 
-function ScrollCanvas({ progress }) {
-  return <div className="webgl-stage"><Canvas camera={{ position: [0, 0, 7], fov: 42 }} dpr={[1, 1.5]}><ambientLight intensity={0.2} /><pointLight position={[3, 2, 4]} color="#00ffd1" intensity={8} /><NeuralArtifact progress={progress} /><EngineNetwork progress={progress} /><GlobeArtifact progress={progress} /><ParticleCta progress={progress} /></Canvas></div>
+function ScrollCanvas({ progress, reducedMotion }) {
+  if (reducedMotion) return <div className="webgl-stage webgl-fallback" aria-hidden="true" />
+  return <div className="webgl-stage"><Canvas camera={{ position: [0, 0, 7], fov: 42 }} dpr={[1, 1.5]} fallback={<div className="webgl-fallback" />}><ambientLight intensity={0.2} /><pointLight position={[3, 2, 4]} color="#00ffd1" intensity={8} /><NeuralArtifact progress={progress} /><EngineNetwork progress={progress} /><GlobeArtifact progress={progress} /><ParticleCta progress={progress} /></Canvas></div>
 }
 
 function Landing() {
   const [count, setCount] = useState(287412)
   const [activeModule, setActiveModule] = useState(null)
   const [progress, setProgress] = useState(0)
+  const [reducedMotion, setReducedMotion] = useState(false)
   const scrollRoot = useRef()
   useEffect(() => {
     const timer = setInterval(() => setCount((value) => value + 3 + Math.floor(Math.random() * 5)), 1000)
     return () => clearInterval(timer)
   }, [])
   useEffect(() => {
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const updateMotion = () => setReducedMotion(media.matches)
+    updateMotion()
+    media.addEventListener('change', updateMotion)
+    return () => media.removeEventListener('change', updateMotion)
+  }, [])
+  useEffect(() => {
+    if (reducedMotion) return undefined
     gsap.registerPlugin(ScrollTrigger)
     const trigger = ScrollTrigger.create({ trigger: scrollRoot.current, start: 'top top', end: 'bottom bottom', scrub: true, onUpdate: (self) => setProgress(self.progress) })
     return () => trigger.kill()
-  }, [])
+  }, [reducedMotion])
   return (
     <main className="landing cinematic-landing" ref={scrollRoot}>
       <header className="site-nav">
@@ -164,7 +189,7 @@ function Landing() {
         <nav><a href="#mission">Mission</a><a href="#shields">The shields</a><a href="#proof">Proof</a></nav>
         <a className="nav-cta" href="#activate">Activate shield <ArrowRight size={15} /></a>
       </header>
-      <ScrollCanvas progress={progress} />
+      <ScrollCanvas progress={progress} reducedMotion={reducedMotion} />
       <section className="scroll-scene scene-problem">
         <div className="starfield" />
         <div className="hero-copy">
@@ -196,13 +221,16 @@ function Dashboard() {
   const [scanned, setScanned] = useState(false)
   const [notice, setNotice] = useState('')
   const [scanning, setScanning] = useState(false)
+  const noticeTimer = useRef()
   const navItems = [{ name: 'Overview', icon: BarChart3 }, ...modules.map(({ name, icon }) => ({ name, icon }))]
   const risk = useMemo(() => scanText.length > 80 ? 72 : 18, [scanText])
   const selectedModule = modules.find((item) => item.name === selected)
   const showNotice = (message) => {
     setNotice(message)
-    window.setTimeout(() => setNotice(''), 2600)
+    window.clearTimeout(noticeTimer.current)
+    noticeTimer.current = window.setTimeout(() => setNotice(''), 2600)
   }
+  useEffect(() => () => window.clearTimeout(noticeTimer.current), [])
   const runSystemScan = () => {
     setScanning(true)
     window.setTimeout(() => {
@@ -210,7 +238,7 @@ function Dashboard() {
       showNotice('System scan complete — all 9 shields are operational.')
     }, 1200)
   }
-  return <main className="dashboard"><aside className={sidebarOpen ? 'open' : ''}><div className="side-head"><Logo /><button className="icon-button mobile-only" onClick={() => setSidebarOpen(false)}><X size={18} /></button></div><div className="side-label">COMMAND CENTER</div><div className="side-nav">{navItems.map(({ name, icon: Icon }) => <button className={selected === name ? 'active' : ''} key={name} onClick={() => { setSelected(name); setScanned(false); setSidebarOpen(false) }}><Icon size={17} />{name}{name === 'Chronicle' && <span className="nav-count">3</span>}</button>)}</div><div className="side-bottom"><button onClick={() => showNotice('Vault settings are protected and ready to configure.')}><LockKeyhole size={17} />Vault settings</button><button className="profile profile-button" onClick={() => showNotice('Profile controls opened for Rohith Rao.')}><div className="profile-avatar">R</div><div><b>Rohith Rao</b><small>Personal shield</small></div><ChevronDown size={15} /></button></div></aside><div className="dash-content"><header className="dash-top"><button className="icon-button mobile-only" onClick={() => setSidebarOpen(true)}><Menu size={20} /></button><div className="dash-status"><span className="pulse-dot" /> SHIELD ACTIVE <small>· synced 24ms ago</small></div><div className="dash-actions"><span className="threat-mini"><Zap size={14} /> 12 threats blocked</span><button className="icon-button" onClick={() => showNotice('No new notifications — your shield is quiet.')}><Bell size={18} /><i /></button><button className="profile-avatar avatar-button" onClick={() => showNotice('Signed in as Rohith Rao.')} aria-label="Open profile">R</button></div></header><div className="dash-main"><div className="dash-welcome"><div><div className="section-kicker">WEDNESDAY · 09 SEP 2026</div><h1>Good evening, Rohith.</h1><p>Your shield is watching the signals that matter.</p></div><button className="button button-small" onClick={runSystemScan} disabled={scanning}><Activity size={15} /> {scanning ? 'Scanning...' : 'Run system scan'}</button></div>{selected === 'Overview' ? <Overview risk={risk} onViewAll={() => showNotice('Timeline expanded — 3 incidents require your attention.')} /> : <ModulePanel module={selectedModule} text={scanText} setText={setScanText} scanned={scanned} setScanned={setScanned} onNotice={showNotice} />}</div></div>{notice && <div className="toast" role="status"><Check size={16} />{notice}</div>}</main>
+  return <main className="dashboard"><aside className={sidebarOpen ? 'open' : ''}><div className="side-head"><Logo /><button className="icon-button mobile-only" onClick={() => setSidebarOpen(false)}><X size={18} /></button></div><div className="side-label">COMMAND CENTER</div><div className="side-nav">{navItems.map(({ name, icon: Icon }) => <button className={selected === name ? 'active' : ''} key={name} onClick={() => { setSelected(name); setScanned(false); setSidebarOpen(false) }}><Icon size={17} />{name}{name === 'Chronicle' && <span className="nav-count">3</span>}</button>)}</div><div className="side-bottom"><button onClick={() => showNotice('Vault settings are protected and ready to configure.')}><LockKeyhole size={17} />Vault settings</button><button className="profile profile-button" onClick={() => showNotice('Profile controls opened for Rohith Rao.')}><div className="profile-avatar">R</div><div><b>Rohith Rao</b><small>Personal shield</small></div><ChevronDown size={15} /></button></div></aside><div className="dash-content"><header className="dash-top"><button className="icon-button mobile-only" onClick={() => setSidebarOpen(true)}><Menu size={20} /></button><div className="dash-status"><span className="pulse-dot" /> SHIELD ACTIVE <small>· synced 24ms ago</small></div><div className="dash-actions"><span className="threat-mini"><Zap size={14} /> 12 threats blocked</span><button className="icon-button" onClick={() => showNotice('No new notifications — your shield is quiet.')}><Bell size={18} /><i /></button><button className="profile-avatar avatar-button" onClick={() => showNotice('Signed in as Rohith Rao.')} aria-label="Open profile">R</button></div></header><div className="dash-main"><div className="dash-welcome"><div><div className="section-kicker">WEDNESDAY · 09 SEP 2026</div><h1>Good evening, Rohith.</h1><p>Your shield is watching the signals that matter.</p></div><button className="button button-small" onClick={runSystemScan} disabled={scanning}><Activity size={15} /> {scanning ? 'Scanning...' : 'Run system scan'}</button></div>{selected === 'Overview' ? <Overview risk={risk} onViewAll={() => showNotice('Timeline expanded — 3 incidents require your attention.')} /> : <ModulePanel key={selected} module={selectedModule} text={scanText} setText={setScanText} scanned={scanned} setScanned={setScanned} onNotice={showNotice} />}</div></div>{notice && <div className="toast" role="status"><Check size={16} />{notice}</div>}</main>
 }
 
 function Overview({ risk, onViewAll }) {
@@ -221,12 +249,30 @@ function ModulePanel({ module, text, setText, scanned, setScanned, onNotice }) {
   const Icon = module?.icon || Search
   const isMind = module?.name === 'Mind Mirror'
   const [file, setFile] = useState(null)
-  return <div className="module-panel"><div className="panel-title"><span className={`large-module-icon ${module?.color}`}><Icon size={27} /></span><div><div className="section-kicker">MODULE 0{modules.findIndex((item) => item.name === module?.name) + 1} / ANALYSIS</div><h1>{module?.name}</h1><p>{module?.detail}</p></div><span className="panel-online"><span className="pulse-dot" /> ONLINE</span></div><div className="analysis-layout"><div className="dash-card analysis-input"><h2>{isMind ? 'Inspect a message' : `Start a ${module?.label?.toLowerCase() || 'system'} scan`}</h2><p>{isMind ? 'Paste an email, message, or article. AEGIS will identify the persuasion patterns trying to influence you.' : 'Upload a signal or connect a source to begin a protected analysis.'}</p>{isMind ? <textarea value={text} onChange={(event) => { setText(event.target.value); setScanned(false) }} placeholder="Paste suspicious text here..." /> : <label className="drop-zone"><input type="file" accept={module?.name === 'Phantom Scanner' ? 'video/*' : 'audio/*,image/*,.pdf,.doc,.docx'} onChange={(event) => { setFile(event.target.files?.[0] || null); setScanned(false) }} /><Upload size={28} /><b>{file ? file.name : 'Drop a file here'}</b><small>{file ? `${Math.ceil(file.size / 1024)} KB ready for analysis` : 'or browse from your device'}</small></label>}<div className="input-footer"><span className="mono">LOCAL PROCESSING ENABLED</span><button className="button button-primary button-small" disabled={!isMind && !file} onClick={() => { setScanned(true); onNotice?.(`${module?.name} analysis complete.`) }}>{scanned ? 'Scan complete' : 'Analyze signal'} <ArrowRight size={15} /></button></div></div><div className={`dash-card analysis-result ${scanned ? 'has-result' : ''}`}><div className="card-header"><h2>Analysis result</h2><span className="mono">AEGIS / 0.9s</span></div>{scanned ? <div className="result-content"><div className="score-circle"><strong>{isMind ? '72' : '94'}</strong><small>confidence</small></div><div><span className={`verdict ${isMind ? 'warn' : 'safe'}`}>{isMind ? 'SUSPICIOUS' : 'AUTHENTIC'}</span><h3>{isMind ? 'Urgency engineering detected' : 'No synthetic artifacts found'}</h3><p>{isMind ? 'This message uses fear amplification and scarcity framing to compress your decision window.' : 'Signal characteristics match the expected human baseline across all verified markers.'}</p></div></div> : <div className="empty-result"><Radar size={31} /><b>Awaiting signal</b><span>Results will appear here after your analysis.</span></div>}</div></div></div>
+  const [analyzing, setAnalyzing] = useState(false)
+  const [error, setError] = useState('')
+  const canAnalyze = isMind ? text.trim().length >= 12 : Boolean(file)
+  const analyze = () => {
+    if (!canAnalyze) {
+      setError(isMind ? 'Add at least 12 characters so the detector has enough context.' : 'Choose a supported file before starting analysis.')
+      return
+    }
+    setError('')
+    setAnalyzing(true)
+    window.setTimeout(() => { setAnalyzing(false); setScanned(true); onNotice?.(`${module?.name} analysis complete.`) }, 900)
+  }
+  const chooseFile = (event) => {
+    const selectedFile = event.target.files?.[0]
+    if (!selectedFile) return
+    if (selectedFile.size > 25 * 1024 * 1024) { setFile(null); setError('Files must be smaller than 25 MB.'); return }
+    setFile(selectedFile); setError(''); setScanned(false)
+  }
+  return <div className="module-panel"><div className="panel-title"><span className={`large-module-icon ${module?.color}`}><Icon size={27} /></span><div><div className="section-kicker">MODULE 0{modules.findIndex((item) => item.name === module?.name) + 1} / ANALYSIS</div><h1>{module?.name}</h1><p>{module?.detail}</p></div><span className="panel-online"><span className="pulse-dot" /> ONLINE</span></div><div className="analysis-layout"><div className="dash-card analysis-input"><h2>{isMind ? 'Inspect a message' : `Start a ${module?.label?.toLowerCase() || 'system'} scan`}</h2><p>{isMind ? 'Paste an email, message, or article. AEGIS will identify the persuasion patterns trying to influence you.' : 'Upload a signal or connect a source to begin a protected analysis.'}</p>{isMind ? <textarea value={text} onChange={(event) => { setText(event.target.value); setScanned(false); setError('') }} placeholder="Paste suspicious text here..." aria-label="Message to analyze" /> : <label className="drop-zone"><input type="file" accept={module?.name === 'Phantom Scanner' ? 'video/*' : 'audio/*,image/*,.pdf,.doc,.docx'} onChange={chooseFile} /><Upload size={28} /><b>{file ? file.name : 'Drop a file here'}</b><small>{file ? `${Math.ceil(file.size / 1024)} KB ready for analysis` : 'or browse from your device'}</small></label>}<div className="input-footer"><span className="mono">LOCAL PROCESSING ENABLED</span><button className="button button-primary button-small" disabled={analyzing} onClick={analyze}>{analyzing ? 'Analyzing...' : scanned ? 'Analyze again' : 'Analyze signal'} <ArrowRight size={15} /></button></div>{error && <p className="input-error" role="alert">{error}</p>}</div><div className={`dash-card analysis-result ${scanned ? 'has-result' : ''}`} aria-live="polite"><div className="card-header"><h2>Analysis result</h2><span className="mono">AEGIS / 0.9s</span></div>{analyzing ? <div className="empty-result"><span className="pulse-dot" /><b>Analyzing signal</b><span>Local processing is checking the available markers.</span></div> : scanned ? <div className="result-content"><div className="score-circle"><strong>{isMind ? '72' : '94'}</strong><small>confidence</small></div><div><span className={`verdict ${isMind ? 'warn' : 'safe'}`}>{isMind ? 'SUSPICIOUS' : 'AUTHENTIC'}</span><h3>{isMind ? 'Urgency engineering detected' : 'No synthetic artifacts found'}</h3><p>{isMind ? 'This message uses fear amplification and scarcity framing to compress your decision window.' : 'Signal characteristics match the expected human baseline across all verified markers.'}</p></div></div> : <div className="empty-result"><Radar size={31} /><b>Awaiting signal</b><span>Results will appear here after your analysis.</span></div>}</div></div></div>
 }
 
 function App() {
   const path = window.location.pathname
-  return path.startsWith('/dashboard') ? <Dashboard /> : <Landing />
+  return <AppErrorBoundary>{path.startsWith('/dashboard') ? <Dashboard /> : <Landing />}</AppErrorBoundary>
 }
 
 export default App
