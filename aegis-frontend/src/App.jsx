@@ -79,6 +79,28 @@ function Logo() {
   return <div className="brand"><Shield size={22} strokeWidth={2.5} /><span>AEGIS</span><i>01</i></div>
 }
 
+function useScrollReveals(scopeRef) {
+  useEffect(() => {
+    const root = scopeRef.current
+    if (!root) return undefined
+    const elements = root.querySelectorAll('[data-reveal]')
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('is-visible')
+          observer.unobserve(entry.target)
+        }
+      })
+    }, { threshold: 0.16 })
+    elements.forEach((element) => observer.observe(element))
+    return () => observer.disconnect()
+  }, [scopeRef])
+}
+
+function CinematicFrame({ label, children, className = '' }) {
+  return <div className={`cinematic-frame ${className}`}><span className="frame-corner frame-corner-tl" /><span className="frame-corner frame-corner-tr" /><span className="frame-corner frame-corner-bl" /><span className="frame-corner frame-corner-br" />{label && <span className="frame-label">{label}</span>}{children}</div>
+}
+
 function sceneAmount(progress, start, end) {
   const fade = 0.06
   return Math.max(0, Math.min(1, (progress - (start - fade)) / fade, ((end + fade) - progress) / fade, (progress - start) / (end - start)))
@@ -164,7 +186,10 @@ function Landing() {
   const [activeModule, setActiveModule] = useState(null)
   const [progress, setProgress] = useState(0)
   const [reducedMotion, setReducedMotion] = useState(false)
+  const [booted, setBooted] = useState(false)
   const scrollRoot = useRef()
+  const pointerFrame = useRef()
+  useScrollReveals(scrollRoot)
   useEffect(() => {
     const timer = setInterval(() => setCount((value) => value + 3 + Math.floor(Math.random() * 5)), 1000)
     return () => clearInterval(timer)
@@ -177,39 +202,57 @@ function Landing() {
     return () => media.removeEventListener('change', updateMotion)
   }, [])
   useEffect(() => {
+    const timer = window.setTimeout(() => setBooted(true), reducedMotion ? 0 : 1400)
+    return () => window.clearTimeout(timer)
+  }, [reducedMotion])
+  useEffect(() => {
     if (reducedMotion) return undefined
     gsap.registerPlugin(ScrollTrigger)
     const trigger = ScrollTrigger.create({ trigger: scrollRoot.current, start: 'top top', end: 'bottom bottom', scrub: true, onUpdate: (self) => setProgress(self.progress) })
     return () => trigger.kill()
   }, [reducedMotion])
+  const handlePointerMove = (event) => {
+    if (reducedMotion || !scrollRoot.current) return
+    if (pointerFrame.current) window.cancelAnimationFrame(pointerFrame.current)
+    pointerFrame.current = window.requestAnimationFrame(() => {
+      const x = ((event.clientX / window.innerWidth) - 0.5) * 2
+      const y = ((event.clientY / window.innerHeight) - 0.5) * 2
+      scrollRoot.current.style.setProperty('--pointer-x', `${x * 14}px`)
+      scrollRoot.current.style.setProperty('--pointer-y', `${y * 10}px`)
+    })
+  }
   return (
-    <main className="landing cinematic-landing" ref={scrollRoot}>
+    <main className={`landing cinematic-landing ${booted ? 'boot-complete' : ''}`} ref={scrollRoot} onPointerMove={handlePointerMove}>
+      <div className="boot-overlay" aria-hidden="true"><CinematicFrame label="AEGIS // INITIALIZING"><span className="boot-mark"><Shield size={34} /><b>AEGIS</b><small>COGNITIVE DEFENSE SYSTEM</small></span><span className="boot-progress" /></CinematicFrame></div>
       <header className="site-nav">
         <Logo />
-        <nav><a href="#mission">Mission</a><a href="#shields">The shields</a><a href="#proof">Proof</a></nav>
+        <nav aria-label="Primary navigation"><a href="#mission">Mission</a><a href="#shields">The shields</a><a href="#proof">Proof</a></nav>
         <a className="nav-cta" href="#activate">Activate shield <ArrowRight size={15} /></a>
       </header>
       <ScrollCanvas progress={progress} reducedMotion={reducedMotion} />
-      <section className="scroll-scene scene-problem">
+      <section className="scroll-scene scene-problem" data-reveal="frame">
         <div className="starfield" />
-        <div className="hero-copy">
+        <div className="hero-atmosphere" aria-hidden="true" />
+        <CinematicFrame label="SYSTEM / 01" className="hero-frame">
+        <div className="hero-copy" data-reveal="mask">
           <div className="eyebrow"><span className="pulse-dot" /> Cognitive defense system · v1.0</div>
           <h1>The world is<br /><span className="gradient-text">under attack.</span></h1>
           <p className="hero-lede">AI criminals have military-grade weapons.<br /><strong>You have nothing. Until now.</strong></p>
           <div className="hero-actions"><a className="button button-primary" href="#activate">Build your defense <ArrowRight size={17} /></a><a className="text-link" href="#mission">Explore the system <ChevronDown size={16} /></a></div>
           <div className="threat-counter"><span>⚠</span><strong>{count.toLocaleString()}</strong><small>AI-generated fraud attempts<br />detected in the last 60 seconds</small></div>
         </div>
+        </CinematicFrame>
         <div className="scene-readout"><span>SCENE 01 / THE PROBLEM</span><b>BRAIN INTEGRITY <em>41%</em></b><small>Fragmentation detected across cognitive surface</small></div>
         <div className="scroll-cue"><span>01</span><div /><span>SCROLL TO ACTIVATE</span></div>
       </section>
-      <section className="scroll-scene scene-engine" id="mission">
+      <section className="scroll-scene scene-engine" id="mission" data-reveal="scan">
         <div className="scene-copy"><div className="section-kicker">SCENE 02 / THE AI ENGINE</div><h2>Intelligence<br /><span className="gradient-text">awakens.</span></h2><p>Watch the defense layer learn the signals your instincts cannot see.</p><div className="engine-status"><span className="pulse-dot" /> NEURAL NETWORK ONLINE <b>{Math.max(1, Math.floor(progress * 9))} / 9 LAYERS</b></div></div>
         <div className="engine-readout"><span>FEATURE ACTIVATION</span><b>VOICE · VISION · LANGUAGE</b><small>Weights converging / response latency 24.7ms</small></div>
       </section>
-      <section className="scroll-scene scene-features" id="shields"><div className="scene-copy"><div className="section-kicker">SCENE 03 / FEATURE DEMOS</div><h2>Every signal.<br /><span className="gradient-text">protected.</span></h2><p>Scroll through the intelligence layer. Each shield turns a different attack surface into a readable, actionable signal.</p></div><div className="feature-stack">{modules.slice(0, 5).map((module, index) => { const Icon = module.icon; return <button className={`feature-3d-card ${module.color} ${activeModule === index ? 'selected' : ''}`} key={module.name} onClick={() => setActiveModule(activeModule === index ? null : index)}><span>0{index + 1}</span><Icon size={28} /><b>{module.name}</b><small>{module.label}</small><em>{activeModule === index ? module.detail : 'INSPECT SIGNAL →'}</em></button> })}</div></section>
-      <section className="scroll-scene scene-impact" id="proof"><div className="scene-copy"><div className="section-kicker">SCENE 04 / IMPACT DASHBOARD</div><h2>Defense at<br /><span className="gradient-text">global scale.</span></h2><p>Every protected signal strengthens the network without exposing the people inside it.</p></div><div className="impact-stats"><div><b>2.4M<span>+</span></b><small>ATTACKS BLOCKED</small></div><div><b>847K<span>+</span></b><small>FAMILIES PROTECTED</small></div><div><b>89M<span>+</span></b><small>ATTEMPTS FLAGGED</small></div></div></section>
-      <section className="scroll-scene scene-cta" id="activate"><div className="cta-glow" /><Sparkles size={22} className="cta-icon" /><div className="section-kicker">SCENE 05 / LIVE DEMO</div><h2>Step inside<br /><span className="gold-text">the shield.</span></h2><p>Particles become protection. Your command center is ready.</p><a className="button button-primary" href="/dashboard">Launch the actual app <ArrowRight size={17} /></a><div className="social-proof"><div className="avatars"><span>R</span><span>M</span><span>A</span><span>J</span><span>+</span></div><small><b>847K+</b> active shields</small></div></section>
-      <footer><Logo /><span>DEFEND YOUR MIND. DEFEND YOUR WORLD.</span><div><a href="#mission">Mission</a><a href="#shields">Systems</a><a href="/dashboard">Dashboard</a></div></footer>
+      <section className="scroll-scene scene-features" id="shields" data-reveal="assemble"><div className="scene-copy"><div className="section-kicker">SCENE 03 / FEATURE DEMOS</div><h2>Every signal.<br /><span className="gradient-text">protected.</span></h2><p>Scroll through the intelligence layer. Each shield turns a different attack surface into a readable, actionable signal.</p></div><div className="feature-stack">{modules.slice(0, 5).map((module, index) => { const Icon = module.icon; return <button className={`feature-3d-card ${module.color} ${activeModule === index ? 'selected' : ''}`} data-reveal="card" style={{ '--card-index': index }} key={module.name} onClick={() => setActiveModule(activeModule === index ? null : index)}><span>0{index + 1}</span><Icon size={28} /><b>{module.name}</b><small>{module.label}</small><em>{activeModule === index ? module.detail : 'INSPECT SIGNAL →'}</em></button> })}</div></section>
+      <section className="scroll-scene scene-impact" id="proof" data-reveal="data"><div className="scene-copy"><div className="section-kicker">SCENE 04 / IMPACT DASHBOARD</div><h2>Defense at<br /><span className="gradient-text">global scale.</span></h2><p>Every protected signal strengthens the network without exposing the people inside it.</p></div><div className="impact-stats"><div><b>2.4M<span>+</span></b><small>ATTACKS BLOCKED</small></div><div><b>847K<span>+</span></b><small>FAMILIES PROTECTED</small></div><div><b>89M<span>+</span></b><small>ATTEMPTS FLAGGED</small></div></div></section>
+      <section className="scroll-scene scene-cta" id="activate" data-reveal="cta"><div className="cta-glow" /><Sparkles size={22} className="cta-icon" /><div className="section-kicker">SCENE 05 / LIVE DEMO</div><h2>Step inside<br /><span className="gold-text">the shield.</span></h2><p>Particles become protection. Your command center is ready.</p><a className="button button-primary" href="/dashboard">Launch the actual app <ArrowRight size={17} /></a><div className="social-proof"><div className="avatars"><span>R</span><span>M</span><span>A</span><span>J</span><span>+</span></div><small><b>847K+</b> active shields</small></div></section>
+      <footer data-reveal="footer"><Logo /><span>DEFEND YOUR MIND. DEFEND YOUR WORLD.</span><div><a href="#mission">Mission</a><a href="#shields">Systems</a><a href="/dashboard">Dashboard</a></div></footer>
     </main>
   )
 }
@@ -222,6 +265,7 @@ function Dashboard() {
   const [notice, setNotice] = useState('')
   const [scanning, setScanning] = useState(false)
   const noticeTimer = useRef()
+  const dashboardRoot = useRef()
   const navItems = [{ name: 'Overview', icon: BarChart3 }, ...modules.map(({ name, icon }) => ({ name, icon }))]
   const risk = useMemo(() => scanText.length > 80 ? 72 : 18, [scanText])
   const selectedModule = modules.find((item) => item.name === selected)
@@ -231,6 +275,7 @@ function Dashboard() {
     noticeTimer.current = window.setTimeout(() => setNotice(''), 2600)
   }
   useEffect(() => () => window.clearTimeout(noticeTimer.current), [])
+  useScrollReveals(dashboardRoot)
   const runSystemScan = () => {
     setScanning(true)
     window.setTimeout(() => {
@@ -238,11 +283,11 @@ function Dashboard() {
       showNotice('System scan complete — all 9 shields are operational.')
     }, 1200)
   }
-  return <main className="dashboard"><aside className={sidebarOpen ? 'open' : ''}><div className="side-head"><Logo /><button className="icon-button mobile-only" onClick={() => setSidebarOpen(false)} aria-label="Close navigation"><X size={18} /></button></div><div className="side-label">COMMAND CENTER</div><div className="side-nav">{navItems.map(({ name, icon: Icon }) => <button className={selected === name ? 'active' : ''} key={name} onClick={() => { setSelected(name); setScanned(false); setSidebarOpen(false) }}><Icon size={17} />{name}{name === 'Chronicle' && <span className="nav-count">3</span>}</button>)}</div><div className="side-bottom"><button onClick={() => showNotice('Vault settings are protected and ready to configure.')}><LockKeyhole size={17} />Vault settings</button><button className="profile profile-button" onClick={() => showNotice('Profile controls opened for Rohith Rao.')}><div className="profile-avatar">R</div><div><b>Rohith Rao</b><small>Personal shield</small></div><ChevronDown size={15} /></button></div></aside><div className="dash-content"><header className="dash-top"><button className="icon-button mobile-only" onClick={() => setSidebarOpen(true)} aria-label="Open navigation"><Menu size={20} /></button><div className="dash-status"><span className="pulse-dot" /> SHIELD ACTIVE <small>· synced 24ms ago</small></div><div className="dash-actions"><span className="threat-mini"><Zap size={14} /> 12 threats blocked</span><button className="icon-button" onClick={() => showNotice('No new notifications — your shield is quiet.')} aria-label="Open notifications"><Bell size={18} /><i /></button><button className="profile-avatar avatar-button" onClick={() => showNotice('Signed in as Rohith Rao.')} aria-label="Open profile">R</button></div></header><div className="dash-main"><div className="dash-welcome"><div><div className="section-kicker">WEDNESDAY · 09 SEP 2026</div><h1>Good evening, Rohith.</h1><p>Your shield is watching the signals that matter.</p></div><button className="button button-small" onClick={runSystemScan} disabled={scanning}><Activity size={15} /> {scanning ? 'Scanning...' : 'Run system scan'}</button></div><div className="demo-disclosure"><span>DEMO MODE</span><p>Analysis results are local simulations until the detection API is connected.</p></div>{selected === 'Overview' ? <Overview risk={risk} onViewAll={() => showNotice('Timeline expanded — 3 incidents require your attention.')} /> : <ModulePanel key={selected} module={selectedModule} text={scanText} setText={setScanText} scanned={scanned} setScanned={setScanned} onNotice={showNotice} />}</div></div>{notice && <div className="toast" role="status"><Check size={16} />{notice}</div>}</main>
+  return <main className="dashboard cinematic-dashboard" ref={dashboardRoot}><aside className={sidebarOpen ? 'open' : ''}><div className="side-head"><Logo /><button className="icon-button mobile-only" onClick={() => setSidebarOpen(false)} aria-label="Close navigation"><X size={18} /></button></div><div className="side-label">COMMAND CENTER</div><div className="side-nav">{navItems.map(({ name, icon: Icon }) => <button className={selected === name ? 'active' : ''} key={name} onClick={() => { setSelected(name); setScanned(false); setSidebarOpen(false) }}><Icon size={17} />{name}{name === 'Chronicle' && <span className="nav-count">3</span>}</button>)}</div><div className="side-bottom"><button onClick={() => showNotice('Vault settings are protected and ready to configure.')}><LockKeyhole size={17} />Vault settings</button><button className="profile profile-button" onClick={() => showNotice('Profile controls opened for Rohith Rao.')}><div className="profile-avatar">R</div><div><b>Rohith Rao</b><small>Personal shield</small></div><ChevronDown size={15} /></button></div></aside><div className="dash-content"><header className="dash-top" data-reveal="slide"><button className="icon-button mobile-only" onClick={() => setSidebarOpen(true)} aria-label="Open navigation"><Menu size={20} /></button><div className="dash-status"><span className="pulse-dot" /> SHIELD ACTIVE <small>· synced 24ms ago</small></div><div className="dash-actions"><span className="threat-mini"><Zap size={14} /> 12 threats blocked</span><button className="icon-button" onClick={() => showNotice('No new notifications — your shield is quiet.')} aria-label="Open notifications"><Bell size={18} /><i /></button><button className="profile-avatar avatar-button" onClick={() => showNotice('Signed in as Rohith Rao.')} aria-label="Open profile">R</button></div></header><div className="dash-main"><div className="dash-welcome" data-reveal="mask"><div><div className="section-kicker">WEDNESDAY · 09 SEP 2026</div><h1>Good evening, Rohith.</h1><p>Your shield is watching the signals that matter.</p></div><button className="button button-small" onClick={runSystemScan} disabled={scanning}><Activity size={15} /> {scanning ? 'Scanning...' : 'Run system scan'}</button></div><div className="demo-disclosure" data-reveal="card"><span>DEMO MODE</span><p>Analysis results are local simulations until the detection API is connected.</p></div>{selected === 'Overview' ? <Overview risk={risk} onViewAll={() => showNotice('Timeline expanded — 3 incidents require your attention.')} /> : <ModulePanel key={selected} module={selectedModule} text={scanText} setText={setScanText} scanned={scanned} setScanned={setScanned} onNotice={showNotice} />}</div></div>{notice && <div className="toast" role="status"><Check size={16} />{notice}</div>}</main>
 }
 
 function Overview({ risk, onViewAll }) {
-  return <><div className="stat-grid"><div className="dash-card stat-card"><small>THREATS BLOCKED TODAY</small><strong>24</strong><span className="stat-trend">↑ 18% vs yesterday</span><div className="mini-bars"><i /><i /><i /><i /><i /><i /><i /></div></div><div className="dash-card stat-card"><small>SHIELD STATUS</small><strong className="active-text">ACTIVE</strong><span className="stat-trend">All systems operational</span><div className="status-ring"><Shield size={24} /></div></div><div className="dash-card stat-card"><small>LAST FULL SCAN</small><strong>08:42<span className="unit">AM</span></strong><span className="stat-trend">Completed 12 min ago</span><div className="scan-wave"><i /><i /><i /><i /><i /><i /></div></div><div className="dash-card stat-card risk-card"><small>RISK SCORE</small><strong>{risk}<span className="unit">/100</span></strong><span className="stat-trend">Low exposure · improving</span><div className="risk-ring" style={{ '--risk': `${risk * 3.6}deg` }} /></div></div><div className="dash-columns"><div className="dash-card timeline-card"><div className="card-header"><h2>Recent threat timeline</h2><button className="inline-action" onClick={onViewAll}>View all <ArrowRight size={14} /></button></div>{threats.map((threat) => <div className="threat-row" key={threat.type}><span className={`threat-icon ${threat.color}`}><Shield size={15} /></span><div><b>{threat.type}</b><p>{threat.text}</p></div><time>{threat.time}</time><span className={`severity ${threat.color}`}>{threat.level}</span></div>)}</div><div className="dash-card globe-card"><div className="card-header"><h2>Global signal map</h2><span className="live-label"><span className="pulse-dot" /> LIVE</span></div><Orb small /><span className="map-stat"><b>4,281</b> signals monitored</span></div></div><div className="module-health"><div className="card-header"><h2>Module health</h2><span className="all-good"><Check size={14} /> 9 / 9 operational</span></div><div className="health-grid">{modules.map(({ name, icon: Icon }) => <div key={name}><Icon size={16} /><span>{name}</span><i className="health-dot" /></div>)}</div></div></>
+  return <><div className="stat-grid" data-reveal="data"><div className="dash-card stat-card"><small>THREATS BLOCKED TODAY</small><strong>24</strong><span className="stat-trend">↑ 18% vs yesterday</span><div className="mini-bars"><i /><i /><i /><i /><i /><i /><i /></div></div><div className="dash-card stat-card"><small>SHIELD STATUS</small><strong className="active-text">ACTIVE</strong><span className="stat-trend">All systems operational</span><div className="status-ring"><Shield size={24} /></div></div><div className="dash-card stat-card"><small>LAST FULL SCAN</small><strong>08:42<span className="unit">AM</span></strong><span className="stat-trend">Completed 12 min ago</span><div className="scan-wave"><i /><i /><i /><i /><i /><i /></div></div><div className="dash-card stat-card risk-card"><small>RISK SCORE</small><strong>{risk}<span className="unit">/100</span></strong><span className="stat-trend">Low exposure · improving</span><div className="risk-ring" style={{ '--risk': `${risk * 3.6}deg` }} /></div></div><div className="dash-columns" data-reveal="slide"><div className="dash-card timeline-card"><div className="card-header"><h2>Recent threat timeline</h2><button className="inline-action" onClick={onViewAll}>View all <ArrowRight size={14} /></button></div>{threats.map((threat) => <div className="threat-row" key={threat.type}><span className={`threat-icon ${threat.color}`}><Shield size={15} /></span><div><b>{threat.type}</b><p>{threat.text}</p></div><time>{threat.time}</time><span className={`severity ${threat.color}`}>{threat.level}</span></div>)}</div><div className="dash-card globe-card"><div className="card-header"><h2>Global signal map</h2><span className="live-label"><span className="pulse-dot" /> LIVE</span></div><Orb small /><span className="map-stat"><b>4,281</b> signals monitored</span></div></div><div className="module-health" data-reveal="assemble"><div className="card-header"><h2>Module health</h2><span className="all-good"><Check size={14} /> 9 / 9 operational</span></div><div className="health-grid">{modules.map(({ name, icon: Icon }) => <div key={name}><Icon size={16} /><span>{name}</span><i className="health-dot" /></div>)}</div></div></>
 }
 
 function ModulePanel({ module, text, setText, scanned, setScanned, onNotice }) {
@@ -267,7 +312,7 @@ function ModulePanel({ module, text, setText, scanned, setScanned, onNotice }) {
     if (selectedFile.size > 25 * 1024 * 1024) { setFile(null); setError('Files must be smaller than 25 MB.'); return }
     setFile(selectedFile); setError(''); setScanned(false)
   }
-  return <div className="module-panel"><div className="panel-title"><span className={`large-module-icon ${module?.color}`}><Icon size={27} /></span><div><div className="section-kicker">MODULE 0{modules.findIndex((item) => item.name === module?.name) + 1} / ANALYSIS</div><h1>{module?.name}</h1><p>{module?.detail}</p></div><span className="panel-online"><span className="pulse-dot" /> ONLINE</span></div><div className="analysis-layout"><div className="dash-card analysis-input"><h2>{isMind ? 'Inspect a message' : `Start a ${module?.label?.toLowerCase() || 'system'} scan`}</h2><p>{isMind ? 'Paste an email, message, or article. AEGIS will identify the persuasion patterns trying to influence you.' : 'Upload a signal or connect a source to begin a protected analysis.'}</p>{isMind ? <textarea value={text} onChange={(event) => { setText(event.target.value); setScanned(false); setError('') }} placeholder="Paste suspicious text here..." aria-label="Message to analyze" /> : <label className="drop-zone"><input type="file" accept={module?.name === 'Phantom Scanner' ? 'video/*' : 'audio/*,image/*,.pdf,.doc,.docx'} onChange={chooseFile} /><Upload size={28} /><b>{file ? file.name : 'Drop a file here'}</b><small>{file ? `${Math.ceil(file.size / 1024)} KB ready for analysis` : 'or browse from your device'}</small></label>}<div className="input-footer"><span className="mono">LOCAL PROCESSING ENABLED</span><button className="button button-primary button-small" disabled={analyzing} onClick={analyze}>{analyzing ? 'Analyzing...' : scanned ? 'Analyze again' : 'Analyze signal'} <ArrowRight size={15} /></button></div>{error && <p className="input-error" role="alert">{error}</p>}</div><div className={`dash-card analysis-result ${scanned ? 'has-result' : ''}`} aria-live="polite"><div className="card-header"><h2>Analysis result</h2><span className="mono">AEGIS / 0.9s</span></div>{analyzing ? <div className="empty-result"><span className="pulse-dot" /><b>Analyzing signal</b><span>Local processing is checking the available markers.</span></div> : scanned ? <div className="result-content"><div className="score-circle"><strong>{isMind ? '72' : '94'}</strong><small>confidence</small></div><div><span className={`verdict ${isMind ? 'warn' : 'safe'}`}>{isMind ? 'SUSPICIOUS' : 'AUTHENTIC'}</span><h3>{isMind ? 'Urgency engineering detected' : 'No synthetic artifacts found'}</h3><p>{isMind ? 'This message uses fear amplification and scarcity framing to compress your decision window.' : 'Signal characteristics match the expected human baseline across all verified markers.'}</p></div></div> : <div className="empty-result"><Radar size={31} /><b>Awaiting signal</b><span>Results will appear here after your analysis.</span></div>}</div></div></div>
+  return <div className={`module-panel ${analyzing ? 'is-analyzing' : ''} ${scanned ? 'is-scanned' : ''}`}><div className="panel-title" data-reveal="mask"><span className={`large-module-icon ${module?.color}`}><Icon size={27} /></span><div><div className="section-kicker">MODULE 0{modules.findIndex((item) => item.name === module?.name) + 1} / ANALYSIS</div><h1>{module?.name}</h1><p>{module?.detail}</p></div><span className="panel-online"><span className="pulse-dot" /> ONLINE</span></div><div className="analysis-layout"><div className="dash-card analysis-input" data-reveal="card"><h2>{isMind ? 'Inspect a message' : `Start a ${module?.label?.toLowerCase() || 'system'} scan`}</h2><p>{isMind ? 'Paste an email, message, or article. AEGIS will identify the persuasion patterns trying to influence you.' : 'Upload a signal or connect a source to begin a protected analysis.'}</p>{isMind ? <textarea value={text} onChange={(event) => { setText(event.target.value); setScanned(false); setError('') }} placeholder="Paste suspicious text here..." aria-label="Message to analyze" /> : <label className="drop-zone"><input type="file" accept={module?.name === 'Phantom Scanner' ? 'video/*' : 'audio/*,image/*,.pdf,.doc,.docx'} onChange={chooseFile} /><Upload size={28} /><b>{file ? file.name : 'Drop a file here'}</b><small>{file ? `${Math.ceil(file.size / 1024)} KB ready for analysis` : 'or browse from your device'}</small></label>}<div className="input-footer"><span className="mono">LOCAL PROCESSING ENABLED</span><button className="button button-primary button-small" disabled={analyzing} onClick={analyze}>{analyzing ? 'Analyzing...' : scanned ? 'Analyze again' : 'Analyze signal'} <ArrowRight size={15} /></button></div>{error && <p className="input-error" role="alert">{error}</p>}</div><div className={`dash-card analysis-result ${scanned ? 'has-result' : ''}`} data-reveal="data" aria-live="polite"><div className="card-header"><h2>Analysis result</h2><span className="mono">AEGIS / 0.9s</span></div>{analyzing ? <div className="empty-result"><span className="pulse-dot" /><b>Analyzing signal</b><span>Local processing is checking the available markers.</span></div> : scanned ? <div className="result-content"><div className="score-circle"><strong>{isMind ? '72' : '94'}</strong><small>confidence</small></div><div><span className={`verdict ${isMind ? 'warn' : 'safe'}`}>{isMind ? 'SUSPICIOUS' : 'AUTHENTIC'}</span><h3>{isMind ? 'Urgency engineering detected' : 'No synthetic artifacts found'}</h3><p>{isMind ? 'This message uses fear amplification and scarcity framing to compress your decision window.' : 'Signal characteristics match the expected human baseline across all verified markers.'}</p></div></div> : <div className="empty-result"><Radar size={31} /><b>Awaiting signal</b><span>Results will appear here after your analysis.</span></div>}</div></div></div>
 }
 
 function App() {
