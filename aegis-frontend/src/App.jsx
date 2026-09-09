@@ -1,4 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Canvas, useFrame } from '@react-three/fiber'
+import * as THREE from 'three'
+import gsap from 'gsap'
+import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import {
   Activity,
   ArrowRight,
@@ -19,7 +23,6 @@ import {
   Search,
   Shield,
   Sparkles,
-  Terminal,
   Upload,
   X,
   Zap,
@@ -61,21 +64,87 @@ function Logo() {
   return <div className="brand"><Shield size={22} strokeWidth={2.5} /><span>AEGIS</span><i>01</i></div>
 }
 
+function NeuralArtifact({ progress }) {
+  const group = useRef()
+  const brain = useRef()
+  const nodes = useRef()
+  const points = useMemo(() => {
+    const values = []
+    for (let i = 0; i < 900; i += 1) {
+      const theta = (i * 2.399963) % (Math.PI * 2)
+      const phi = Math.acos(1 - 2 * ((i + 0.5) / 900))
+      const radius = 1.8 + Math.sin(i * 12.9898) * 0.12
+      values.push(new THREE.Vector3(
+        Math.sin(phi) * Math.cos(theta) * radius * 1.08,
+        Math.cos(phi) * radius,
+        Math.sin(phi) * Math.sin(theta) * radius * 0.78,
+      ))
+    }
+    return values
+  }, [])
+  useFrame((_, delta) => {
+    if (!group.current) return
+    group.current.rotation.y += delta * 0.08
+    group.current.rotation.x = progress < 0.3 ? progress * 0.3 : (progress - 0.5) * 0.15
+    if (brain.current) brain.current.scale.setScalar(1 + progress * 0.18)
+    if (nodes.current) nodes.current.material.opacity = 0.2 + Math.min(progress * 1.7, 0.8)
+  })
+  const geometry = useMemo(() => {
+    const buffer = new THREE.BufferGeometry()
+    buffer.setFromPoints(points)
+    return buffer
+  }, [points])
+  return <group ref={group}>
+    <points ref={brain} geometry={geometry}><pointsMaterial color="#00ffd1" size={0.026} transparent opacity={0.75} blending={THREE.AdditiveBlending} /></points>
+    <points ref={nodes} geometry={geometry}><pointsMaterial color={progress > 0.35 ? '#9c6cff' : '#ff4545'} size={0.055} transparent opacity={0.3} blending={THREE.AdditiveBlending} /></points>
+    {Array.from({ length: 18 }, (_, index) => <mesh key={index} position={points[index * 42]}><sphereGeometry args={[0.045, 8, 8]} /><meshBasicMaterial color={progress > 0.35 ? '#00ffd1' : '#ff4545'} /></mesh>)}
+  </group>
+}
+
+function EngineNetwork({ progress }) {
+  const group = useRef()
+  useFrame((_, delta) => { if (group.current) group.current.rotation.y += delta * 0.12 })
+  const lines = useMemo(() => Array.from({ length: 20 }, (_, i) => {
+    const a = new THREE.Vector3(Math.sin(i) * 1.4, Math.cos(i * 1.7) * 1.4, Math.sin(i * 2) * 1.1)
+    const b = new THREE.Vector3(Math.sin(i + 1.2) * 1.4, Math.cos(i * 1.7 + 1) * 1.4, Math.sin(i * 2 + 1) * 1.1)
+    return [a, b]
+  }), [])
+  return <group ref={group}>{lines.map(([a, b], index) => <group key={index}><line><bufferGeometry><bufferAttribute attach="attributes-position" count={2} array={new Float32Array([...a.toArray(), ...b.toArray()])} itemSize={3} /></bufferGeometry><lineBasicMaterial color={index / 20 < progress ? '#00ffd1' : '#263b3c'} transparent opacity={0.8} /></line><mesh position={a}><sphereGeometry args={[0.07, 8, 8]} /><meshBasicMaterial color={index / 20 < progress ? '#00ffd1' : '#30494a'} /></mesh></group>)}</group>
+}
+
+function GlobeArtifact({ progress }) {
+  const group = useRef()
+  useFrame((_, delta) => { if (group.current) group.current.rotation.y += delta * 0.1 })
+  return <group ref={group}><mesh><sphereGeometry args={[1.8, 32, 32]} /><meshBasicMaterial color="#073b3c" wireframe transparent opacity={0.55} /></mesh>{Array.from({ length: 16 }, (_, i) => <mesh key={i} position={[Math.sin(i) * 1.7, Math.cos(i * 1.3) * 1.3, Math.sin(i * 2.1) * 1.4]}><sphereGeometry args={[0.045 + progress * 0.03, 8, 8]} /><meshBasicMaterial color={i % 3 === 0 ? '#ffd44d' : '#00ffd1'} /></mesh>)}</group>
+}
+
+function ScrollCanvas({ progress }) {
+  return <div className="webgl-stage"><Canvas camera={{ position: [0, 0, 7], fov: 42 }} dpr={[1, 1.5]}><ambientLight intensity={0.2} /><pointLight position={[3, 2, 4]} color="#00ffd1" intensity={8} /><NeuralArtifact progress={progress} /><EngineNetwork progress={progress} /><GlobeArtifact progress={progress} /></Canvas></div>
+}
+
 function Landing() {
   const [count, setCount] = useState(287412)
   const [activeModule, setActiveModule] = useState(null)
+  const [progress, setProgress] = useState(0)
+  const scrollRoot = useRef()
   useEffect(() => {
     const timer = setInterval(() => setCount((value) => value + 3 + Math.floor(Math.random() * 5)), 1000)
     return () => clearInterval(timer)
   }, [])
+  useEffect(() => {
+    gsap.registerPlugin(ScrollTrigger)
+    const trigger = ScrollTrigger.create({ trigger: scrollRoot.current, start: 'top top', end: 'bottom bottom', scrub: true, onUpdate: (self) => setProgress(self.progress) })
+    return () => trigger.kill()
+  }, [])
   return (
-    <main className="landing">
+    <main className="landing cinematic-landing" ref={scrollRoot}>
       <header className="site-nav">
         <Logo />
         <nav><a href="#mission">Mission</a><a href="#shields">The shields</a><a href="#proof">Proof</a></nav>
         <a className="nav-cta" href="#activate">Activate shield <ArrowRight size={15} /></a>
       </header>
-      <section className="hero-section">
+      <ScrollCanvas progress={progress} />
+      <section className="scroll-scene scene-problem">
         <div className="starfield" />
         <div className="hero-copy">
           <div className="eyebrow"><span className="pulse-dot" /> Cognitive defense system · v1.0</div>
@@ -84,19 +153,16 @@ function Landing() {
           <div className="hero-actions"><a className="button button-primary" href="#activate">Build your defense <ArrowRight size={17} /></a><a className="text-link" href="#mission">Explore the system <ChevronDown size={16} /></a></div>
           <div className="threat-counter"><span>⚠</span><strong>{count.toLocaleString()}</strong><small>AI-generated fraud attempts<br />detected in the last 60 seconds</small></div>
         </div>
-        <div className="hero-orb"><Orb /><div className="orb-label label-top">THREAT SURFACE <b>ACTIVE</b></div><div className="orb-label label-bottom">LIVE TELEMETRY <b>● 24.7ms</b></div></div>
-        <div className="scroll-cue"><span>01</span><div /><span>SCROLL TO DISCOVER</span></div>
+        <div className="scene-readout"><span>SCENE 01 / THE PROBLEM</span><b>BRAIN INTEGRITY <em>41%</em></b><small>Fragmentation detected across cognitive surface</small></div>
+        <div className="scroll-cue"><span>01</span><div /><span>SCROLL TO ACTIVATE</span></div>
       </section>
-      <section className="manifesto" id="mission">
-        <div className="section-kicker">01 / THE INVISIBLE WAR</div>
-        <h2>Your enemy is <span className="gradient-text">invisible.</span><br />And perfect.</h2>
-        <p>One convincing voice. One fabricated face. One message engineered to bypass your instincts. AEGIS turns the invisible into signals you can see, understand, and stop.</p>
-        <div className="threat-scene"><div className="scene-grid" /><div className="silhouette silhouette-one" /><div className="silhouette silhouette-two" /><div className="device device-phone"><Activity size={18} /></div><div className="device device-laptop"><Terminal size={20} /></div><span className="tendril t1" /><span className="tendril t2" /><span className="tendril t3" /><div className="scene-callout c1"><b>VOICE CLONE</b><small>synthetic biomarker</small></div><div className="scene-callout c2"><b>DEEPFAKE VIDEO</b><small>temporal artifact</small></div><div className="scene-callout c3"><b>AI PHISHING</b><small>urgency pattern</small></div><div className="scene-caption">THE THREAT DOESN'T<br /><span>LOOK LIKE A THREAT.</span></div></div>
+      <section className="scroll-scene scene-engine" id="mission">
+        <div className="scene-copy"><div className="section-kicker">SCENE 02 / THE AI ENGINE</div><h2>Intelligence<br /><span className="gradient-text">awakens.</span></h2><p>Watch the defense layer learn the signals your instincts cannot see.</p><div className="engine-status"><span className="pulse-dot" /> NEURAL NETWORK ONLINE <b>{Math.max(1, Math.floor(progress * 9))} / 9 LAYERS</b></div></div>
+        <div className="engine-readout"><span>FEATURE ACTIVATION</span><b>VOICE · VISION · LANGUAGE</b><small>Weights converging / response latency 24.7ms</small></div>
       </section>
-      <section className="awakening-section"><div className="section-kicker">02 / THE AEGIS AWAKENING</div><div className="awakening-layout"><div><h2>Protection is<br /><span className="gold-text">a system.</span></h2><p>Nine specialized intelligence systems. One unified shield around the moments that matter.</p><a className="text-link" href="#shields">Meet the nine shields <ArrowRight size={16} /></a></div><div className="dome-wrap"><div className="dome"><Shield size={76} /></div><div className="orbit orbit-one" /><div className="orbit orbit-two" /><span className="orbit-node n1">01</span><span className="orbit-node n2">04</span><span className="orbit-node n3">09</span></div></div></section>
-      <section className="shields-section" id="shields"><div className="section-heading"><div><div className="section-kicker">03 / THE NINE SHIELDS</div><h2>One shield.<br /><span className="gradient-text">Every signal.</span></h2></div><p>Defense that works in the background, so you can stay in the moment. Explore the intelligence layer protecting your digital life.</p></div><div className="module-grid">{modules.map((module, index) => { const Icon = module.icon; return <button className={`module-card ${module.color} ${activeModule === index ? 'selected' : ''}`} key={module.name} onClick={() => setActiveModule(activeModule === index ? null : index)}><span className="module-index">0{index + 1}</span><Icon size={26} /><h3>{module.name}</h3><span>{module.label}</span><p>{activeModule === index ? module.detail : 'Tap to inspect module →'}</p><div className="card-line" /></button> })}</div></section>
-      <section className="proof-section" id="proof"><div className="section-kicker">04 / VERIFIED IMPACT</div><h2>The numbers<br /><span className="gradient-text">don't lie.</span></h2><div className="proof-grid"><div><strong>2.4M<span>+</span></strong><small>Attacks blocked</small></div><div><strong>847K<span>+</span></strong><small>Families protected</small></div><div><strong>12M<span>+</span></strong><small>Voice clones caught</small></div><div><strong>89M<span>+</span></strong><small>Attempts flagged</small></div></div></section>
-      <section className="cta-section" id="activate"><div className="cta-glow" /><Sparkles size={22} className="cta-icon" /><div className="section-kicker">05 / JOIN THE RESISTANCE</div><h2>Activate<br /><span className="gold-text">your shield.</span></h2><p>Join 847,000 people who chose to fight back.</p><a className="button button-primary" href="/dashboard">Get protected now <ArrowRight size={17} /></a><div className="social-proof"><div className="avatars"><span>R</span><span>M</span><span>A</span><span>J</span><span>+</span></div><small><b>847K+</b> active shields</small></div></section>
+      <section className="scroll-scene scene-features" id="shields"><div className="scene-copy"><div className="section-kicker">SCENE 03 / FEATURE DEMOS</div><h2>Every signal.<br /><span className="gradient-text">protected.</span></h2><p>Scroll through the intelligence layer. Each shield turns a different attack surface into a readable, actionable signal.</p></div><div className="feature-stack">{modules.slice(0, 5).map((module, index) => { const Icon = module.icon; return <button className={`feature-3d-card ${module.color} ${activeModule === index ? 'selected' : ''}`} key={module.name} onClick={() => setActiveModule(activeModule === index ? null : index)}><span>0{index + 1}</span><Icon size={28} /><b>{module.name}</b><small>{module.label}</small><em>{activeModule === index ? module.detail : 'INSPECT SIGNAL →'}</em></button> })}</div></section>
+      <section className="scroll-scene scene-impact" id="proof"><div className="scene-copy"><div className="section-kicker">SCENE 04 / IMPACT DASHBOARD</div><h2>Defense at<br /><span className="gradient-text">global scale.</span></h2><p>Every protected signal strengthens the network without exposing the people inside it.</p></div><div className="impact-stats"><div><b>2.4M<span>+</span></b><small>ATTACKS BLOCKED</small></div><div><b>847K<span>+</span></b><small>FAMILIES PROTECTED</small></div><div><b>89M<span>+</span></b><small>ATTEMPTS FLAGGED</small></div></div></section>
+      <section className="scroll-scene scene-cta" id="activate"><div className="cta-glow" /><Sparkles size={22} className="cta-icon" /><div className="section-kicker">SCENE 05 / LIVE DEMO</div><h2>Step inside<br /><span className="gold-text">the shield.</span></h2><p>Particles become protection. Your command center is ready.</p><a className="button button-primary" href="/dashboard">Launch the actual app <ArrowRight size={17} /></a><div className="social-proof"><div className="avatars"><span>R</span><span>M</span><span>A</span><span>J</span><span>+</span></div><small><b>847K+</b> active shields</small></div></section>
       <footer><Logo /><span>DEFEND YOUR MIND. DEFEND YOUR WORLD.</span><div><a href="#mission">Mission</a><a href="#shields">Systems</a><a href="/dashboard">Dashboard</a></div></footer>
     </main>
   )
