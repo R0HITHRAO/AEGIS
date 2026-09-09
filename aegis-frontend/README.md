@@ -21,6 +21,18 @@ center.
 - No credentials, model keys, or backend URLs are required for the current build.
 - `aegis-backend` is reserved for the future FastAPI detection services; model,
   authentication, database, and persistence integrations are not implemented yet.
+- The dashboard displays a persistent `DEMO MODE` disclosure while analysis
+  results are local simulations.
+
+## Environment variables
+
+Copy `.env.example` to `.env.local` when connecting a future API:
+
+| Variable | Required | Description |
+| --- | --- | --- |
+| `VITE_API_BASE_URL` | No | Public base URL for future detection API requests. |
+
+Never place private keys or service credentials in `VITE_` variables.
 
 ## Deployment
 
